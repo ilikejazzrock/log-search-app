@@ -16,7 +16,7 @@ jobs:
           python-version: '3.11'
 
       - name: Install Flet
-        run: pip install flet
+        run: pip install flet==0.23.2
 
       - name: Setup Java
         uses: actions/setup-java@v4
