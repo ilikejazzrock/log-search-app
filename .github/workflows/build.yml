@@ -27,7 +27,7 @@ jobs:
       - name: Setup Flutter (Stable for Flet 0.23.2)
         uses: subosito/flutter-action@v2
         with:
-          flutter-version: '3.19.6'
+          flutter-version: '3.22.3'
 
       - name: Accept Android Licenses
         run: yes | flutter doctor --android-licenses
