@@ -2,155 +2,175 @@ import flet as ft
 import re
 
 def main(page: ft.Page):
-    # 앱 기본 테마 및 스크롤 설정
-    page.title = "업무일지 검색기"
+    # 기본 페이지 설정
+    page.title = "업무일지 스마트 검색"
     page.theme_mode = ft.ThemeMode.LIGHT
-    page.scroll = "adaptive"
-    page.padding = 25
+    page.scroll = ft.ScrollMode.AUTO
+    page.padding = 20
 
-    # 1. UI 디자인: 제목
-    title = ft.Text("🔍 업무일지 스마트 검색", size=24, weight=ft.FontWeight.BOLD, color=ft.colors.BLUE_700)
+    # ---------------------------------------------------
+    # 1. 내부 기억장치에서 기존 파일 데이터 불러오기
+    # ---------------------------------------------------
+    log_content = page.client_storage.get("log_content") or ""
+    log_filename = page.client_storage.get("log_filename") or ""
+    current_search_results = [] # 검색 결과를 복사하기 위해 모아둘 리스트
 
-    # 2. UI 디자인: 파일 선택 구역
-    file_path_data = {"path": ""}
-    selected_file_text = ft.Text("📁 선택된 파일이 없습니다.", color=ft.colors.RED_500, size=13)
+    # ---------------------------------------------------
+    # 2. 화면 UI 구성 요소들 준비
+    # ---------------------------------------------------
+    title = ft.Text("🔍 업무일지 스마트 검색", size=28, weight=ft.FontWeight.BOLD, color=ft.colors.BLUE_700)
+    
+    file_status = ft.Text(
+        f"📁 현재 저장된 파일: {log_filename}" if log_filename else "📁 선택된 파일이 없습니다.", 
+        color=ft.colors.GREEN_700 if log_filename else ft.colors.RED,
+        weight=ft.FontWeight.BOLD,
+        size=16
+    )
+    
+    search_input = ft.TextField(
+        label="검색어를 입력하세요", 
+        border_color=ft.colors.BLUE,
+        focused_border_color=ft.colors.BLUE_700
+    )
+    
+    result_count = ft.Text(
+        "✅ 파일이 기억되어 있습니다. 바로 검색을 시작하세요!" if log_content else "✅ 검색을 위해 파일을 먼저 선택해주세요.", 
+        size=16, 
+        weight=ft.FontWeight.BOLD
+    )
+    
+    result_view = ft.Column(spacing=15)
 
+    # ---------------------------------------------------
+    # 3. 기능: 파일 선택 및 스마트폰에 영구 저장
+    # ---------------------------------------------------
     def on_file_picked(e: ft.FilePickerResultEvent):
+        nonlocal log_content, log_filename
         if e.files and len(e.files) > 0:
-            file_path_data["path"] = e.files[0].path
-            selected_file_text.value = f"📁 파일 선택됨: {e.files[0].name}"
-            selected_file_text.color = ft.colors.GREEN_700
-        else:
-            file_path_data["path"] = ""
-            selected_file_text.value = "📁 선택된 파일이 없습니다."
-            selected_file_text.color = ft.colors.RED_500
-        page.update()
+            file_path = e.files[0].path
+            file_name = e.files[0].name
+            try:
+                # 한글 깨짐 방지를 위해 utf-8과 cp949 모두 시도
+                try:
+                    with open(file_path, "r", encoding="utf-8") as f:
+                        log_content = f.read()
+                except UnicodeDecodeError:
+                    with open(file_path, "r", encoding="cp949") as f:
+                        log_content = f.read()
+                
+                log_filename = file_name
+                
+                # 스마트폰 내부 기억장치에 저장 (다음부터 안 찾아도 됨)
+                page.client_storage.set("log_content", log_content)
+                page.client_storage.set("log_filename", log_filename)
+                
+                file_status.value = f"📁 파일 업데이트 완료: {log_filename}"
+                file_status.color = ft.colors.GREEN_700
+                result_count.value = "✅ 파일이 성공적으로 기억되었습니다. 검색해보세요!"
+                result_view.controls.clear()
+                page.update()
+            except Exception as ex:
+                file_status.value = f"❌ 파일 읽기 오류: {str(ex)}"
+                file_status.color = ft.colors.RED
+                page.update()
 
     file_picker = ft.FilePicker(on_result=on_file_picked)
     page.overlay.append(file_picker)
 
-    file_btn = ft.ElevatedButton(
-        text="1. 업무일지 파일 선택하기",
-        icon=ft.icons.UPLOAD_FILE,
-        bgcolor=ft.colors.GREY_200,
-        color=ft.colors.BLACK87,
-        on_click=lambda _: file_picker.pick_files(allow_multiple=False)
-    )
-
-    # 3. UI 디자인: 검색어 입력 구역
-    keyword_input = ft.TextField(
-        label="검색어를 입력하세요",
-        hint_text="예: 배터리",
-        border_color=ft.colors.BLUE_400,
-        width=350,
-        autofocus=True
-    )
-
-    # 4. UI 디자인: 결과 출력 구역
-    result_text = ft.Text("결과가 여기에 표시됩니다.", size=14, selectable=True)
-
-    # 5. 검색 실행 로직
-    def perform_search(e):
-        input_file = file_path_data["path"]
-        keyword = keyword_input.value.strip()
-
-        if not input_file:
-            result_text.value = "⚠️ 먼저 [업무일지 파일]을 선택해 주세요!"
-            result_text.color = ft.colors.RED_500
+    # ---------------------------------------------------
+    # 4. 기능: 검색 및 추출
+    # ---------------------------------------------------
+    def search_click(e):
+        nonlocal current_search_results
+        keyword = search_input.value.strip()
+        
+        if not log_content:
+            result_count.value = "❌ 업무일지 파일을 먼저 선택해주세요!"
+            result_count.color = ft.colors.RED
             page.update()
             return
-
+            
         if not keyword:
-            result_text.value = "⚠️ 검색어를 입력해 주세요!"
-            result_text.color = ft.colors.RED_500
+            result_count.value = "❌ 검색어를 입력해주세요!"
+            result_count.color = ft.colors.RED
             page.update()
             return
 
-        try:
-            with open(input_file, 'r', encoding='utf-8') as f:
-                lines = f.readlines()
-
-            date_pattern = re.compile(r"^\d{4}/\d{1,2}/\d{1,2}")
-            entries = []
-            current_date_line = ""
-            current_title_line = ""
-            current_content_lines = []
-
-            def save_entry():
-                if current_date_line and current_title_line:
-                    entries.append({
-                        "date_line": current_date_line,
-                        "title_line": current_title_line,
-                        "content_lines": current_content_lines.copy()
-                    })
-
-            for line in lines:
-                if not line.strip(): continue
-                if date_pattern.match(line):
-                    save_entry()
-                    current_date_line = line.strip()
-                    current_title_line = ""
-                    current_content_lines = []
-                elif not line.startswith('\t') and not line.startswith(' '):
-                    save_entry()
-                    current_title_line = line.strip()
-                    current_content_lines = []
-                else:
-                    current_content_lines.append(line.rstrip('\n'))
-            save_entry()
-
-            match_count = 0
-            display_text = ""
-
-            for entry in entries:
-                search_text = entry['title_line'] + " " + " ".join(entry['content_lines'])
-                if keyword in search_text:
-                    display_text += f"{entry['date_line']}\n{entry['title_line']}\n"
-                    for content_line in entry['content_lines']:
-                        display_text += f"{content_line}\n"
-                    display_text += "\n"
-                    match_count += 1
-
-            if match_count > 0:
-                result_text.value = f"✅ 총 {match_count}개의 항목을 찾았습니다!\n\n{display_text}"
-                result_text.color = ft.colors.BLACK
-            else:
-                result_text.value = f"⚠️ '{keyword}'(이)가 포함된 내용을 찾을 수 없습니다."
-                result_text.color = ft.colors.RED_500
-
-        except Exception as ex:
-            result_text.value = f"❌ 오류 발생: {ex}"
-            result_text.color = ft.colors.RED_500
+        # 빈 줄(단락)을 기준으로 텍스트를 나눔 (날짜와 내용이 한 세트로 묶이게 함)
+        blocks = re.split(r'\n\s*\n', log_content)
+        
+        found_blocks = []
+        for block in blocks:
+            if keyword in block:
+                found_blocks.append(block.strip())
+        
+        current_search_results = found_blocks # 복사 기능을 위해 저장
+        
+        # 화면에 결과 출력
+        result_view.controls.clear()
+        if found_blocks:
+            result_count.value = f"✅ 총 {len(found_blocks)}개의 항목을 찾았습니다!"
+            result_count.color = ft.colors.GREEN_700
+            for fb in found_blocks:
+                result_view.controls.append(
+                    ft.Container(
+                        content=ft.Text(fb, size=16),
+                        padding=15,
+                        border=ft.border.all(1, ft.colors.BLUE_200),
+                        border_radius=8,
+                        bgcolor=ft.colors.BLUE_50
+                    )
+                )
+        else:
+            result_count.value = "❌ 검색 결과가 없습니다."
+            result_count.color = ft.colors.RED
 
         page.update()
 
-    # 파란색 검색 버튼
-    search_btn = ft.ElevatedButton(
-        text="2. 검색 및 추출하기",
-        icon=ft.icons.SEARCH,
-        bgcolor=ft.colors.BLUE_600,
-        color=ft.colors.WHITE,
-        width=350,
-        height=50,
-        on_click=perform_search
-    )
-
-    # 6. 화면에 레고 블록 조립하기
-    page.add(
-        ft.Column(
-            [
-                title,
-                ft.Divider(height=20, color=ft.colors.TRANSPARENT),
-                file_btn,
-                selected_file_text,
-                ft.Divider(height=10, color=ft.colors.TRANSPARENT),
-                keyword_input,
-                search_btn,
-                ft.Divider(height=20, color=ft.colors.GREY_300),
-                result_text
-            ],
-            horizontal_alignment=ft.CrossAxisAlignment.CENTER
+    # ---------------------------------------------------
+    # 5. 기능: 검색 결과 클립보드 복사 (공유/저장용)
+    # ---------------------------------------------------
+    def copy_click(e):
+        if not current_search_results:
+            page.snack_bar = ft.SnackBar(ft.Text("❌ 복사할 검색 결과가 없습니다."))
+            page.snack_bar.open = True
+            page.update()
+            return
+        
+        # 검색된 단락들을 빈 줄을 사이에 두고 하나의 텍스트로 합치기
+        result_text = "\n\n".join(current_search_results)
+        page.set_clipboard(result_text) # 스마트폰 클립보드에 복사
+        
+        page.snack_bar = ft.SnackBar(
+            ft.Text("✅ 검색 결과가 복사되었습니다! 카카오톡이나 메모장에 붙여넣기 하세요."),
+            bgcolor=ft.colors.GREEN_700
         )
+        page.snack_bar.open = True
+        page.update()
+
+    # ---------------------------------------------------
+    # 6. 화면에 모든 요소 순서대로 배치하기
+    # ---------------------------------------------------
+    page.add(
+        title,
+        ft.Divider(),
+        ft.ElevatedButton(
+            "📄 1. 업무일지 파일 선택하기 (최초 1회만)", 
+            icon=ft.icons.UPLOAD_FILE,
+            on_click=lambda _: file_picker.pick_files(allow_multiple=False),
+            height=45
+        ),
+        file_status,
+        ft.Divider(),
+        search_input,
+        ft.Row([
+            ft.ElevatedButton("🔍 2. 검색하기", on_click=search_click, bgcolor=ft.colors.BLUE_600, color=ft.colors.WHITE, height=45),
+            ft.ElevatedButton("📋 3. 결과 복사", on_click=copy_click, bgcolor=ft.colors.GREEN_600, color=ft.colors.WHITE, height=45),
+        ], wrap=True),
+        ft.Divider(),
+        result_count,
+        result_view
     )
 
+# 0.23.2 버전에 맞는 과거형 명령어
 ft.app(target=main)
