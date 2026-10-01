@@ -35,7 +35,7 @@ jobs:
       - name: Build APK
         run: |
           set +o pipefail
-          yes | flet build apk --project log_search_app --product "Log Search"
+          yes | flet build apk
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
