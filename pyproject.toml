@@ -1,0 +1,6 @@
+[project]
+name = "log-search-app"
+version = "1.0.0"
+dependencies = [
+    "flet"
+]
