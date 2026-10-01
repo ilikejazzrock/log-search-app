@@ -28,9 +28,9 @@ jobs:
         uses: subosito/flutter-action@v2
         with:
           flutter-version: '3.22.3'
-          
+
       - name: Accept Android Licenses
-        run: yes | flutter doctor --android-licenses          
+        run: yes | flutter doctor --android-licenses
 
       - name: Build APK
         run: yes | flet build apk
