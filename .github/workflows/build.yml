@@ -10,10 +10,25 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Build APK (Official Action)
-        uses: flet-dev/flet-build-action@v1
+      - name: Setup Python
+        uses: actions/setup-python@v5
         with:
-          target: apk
+          python-version: '3.11'
+
+      - name: Install Flet
+        run: pip install flet
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'zulu'
+          java-version: '17'
+
+      - name: Accept Android Licenses
+        run: yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses
+
+      - name: Build APK
+        run: yes | flet build apk
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
