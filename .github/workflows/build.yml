@@ -28,6 +28,9 @@ jobs:
         uses: subosito/flutter-action@v2
         with:
           channel: 'stable'
+          
+      - name: Accept Android Licenses
+        run: yes | flutter doctor --android-licenses          
 
       - name: Build APK
         run: yes | flet build apk
