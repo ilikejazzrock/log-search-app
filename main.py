@@ -3,7 +3,7 @@ import re
 
 def main(page: ft.Page):
     # 기본 페이지 설정
-    page.title = "업무일지 스마트 검색"
+    page.title = "업무일지 검색"
     page.theme_mode = ft.ThemeMode.LIGHT
     page.scroll = ft.ScrollMode.AUTO
     page.padding = 20
@@ -18,7 +18,7 @@ def main(page: ft.Page):
     # ---------------------------------------------------
     # 2. 화면 UI 구성 요소들 준비
     # ---------------------------------------------------
-    title = ft.Text("🔍 업무일지 스마트 검색", size=28, weight=ft.FontWeight.BOLD, color=ft.colors.BLUE_700)
+    title = ft.Text("🔍 업무일지 검색", size=24, weight=ft.FontWeight.BOLD, color=ft.colors.BLUE_700)
     
     file_status = ft.Text(
         f"📁 현재 저장된 파일: {log_filename}" if log_filename else "📁 선택된 파일이 없습니다.", 
