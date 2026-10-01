@@ -24,8 +24,13 @@ jobs:
           distribution: 'zulu'
           java-version: '17'
 
+      - name: Setup Flutter (Stable for Flet 0.23.2)
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.19.6'
+
       - name: Accept Android Licenses
-        run: yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses
+        run: yes | flutter doctor --android-licenses
 
       - name: Build APK
         run: |
