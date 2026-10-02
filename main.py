@@ -60,7 +60,7 @@ def main(page: ft.Page):
                 
                 log_filename = file_name
                 
-                # 스마트폰 내부 기억장치에 저장 (다음부터 안 찾아도 됨)
+                # 스마트폰 내부 기억장치에 저장
                 page.client_storage.set("log_content", log_content)
                 page.client_storage.set("log_filename", log_filename)
                 
@@ -78,7 +78,7 @@ def main(page: ft.Page):
     page.overlay.append(file_picker)
 
     # ---------------------------------------------------
-    # 4. 기능: 검색 및 추출
+    # 4. 기능: 스마트 검색 및 추출 (PC 버전 로직 완벽 이식)
     # ---------------------------------------------------
     def search_click(e):
         nonlocal current_search_results
@@ -96,13 +96,60 @@ def main(page: ft.Page):
             page.update()
             return
 
-        # 빈 줄(단락)을 기준으로 텍스트를 나눔 (날짜와 내용이 한 세트로 묶이게 함)
-        blocks = re.split(r'\n\s*\n', log_content)
-        
+        blocks = []
+        curr_date = ""
+        curr_block = []
+        has_indented = False
+
+        # 한 줄씩 읽으면서 똑똑하게 덩어리 나누기
+        for line in log_content.split('\n'):
+            stripped = line.strip()
+            if not stripped:
+                if curr_block:
+                    curr_block.append(line)
+                continue
+
+            # 1. 날짜 확인 (예: 2026/10/1목, 2026-10-01 등)
+            if re.match(r'^\d{4}[/-]\d{1,2}[/-]\d{1,2}', line):
+                if curr_block:
+                    blocks.append((curr_date, curr_block))
+                curr_date = stripped
+                curr_block = []
+                has_indented = False
+                continue
+
+            # 2. 들여쓰기(탭 또는 스페이스) 여부 확인
+            is_indented = line.startswith(' ') or line.startswith('\t')
+
+            if not is_indented:
+                # 들여쓰기가 없는 줄 (제목)
+                if has_indented:
+                    # 이전 제목에 대한 세부내용(들여쓰기)이 끝났으므로, 이전 덩어리를 저장
+                    if curr_block:
+                        blocks.append((curr_date, curr_block))
+                    curr_block = [line]
+                    has_indented = False
+                else:
+                    # 세부내용 없이 제목만 연속으로 나오면 같은 덩어리로 묶음 (예: 병가휴가 -> 치과)
+                    curr_block.append(line)
+            else:
+                # 들여쓰기가 있는 줄 (세부내용)
+                has_indented = True
+                curr_block.append(line)
+
+        # 마지막 덩어리 저장
+        if curr_block:
+            blocks.append((curr_date, curr_block))
+            
+        # 검색어 매칭하기
         found_blocks = []
-        for block in blocks:
-            if keyword in block:
-                found_blocks.append(block.strip())
+        for date, block_lines in blocks:
+            clean_block = "\n".join(block_lines).rstrip() # 끝에 남는 빈 줄 정리
+            full_text = f"{date}\n{clean_block}" if date else clean_block
+            
+            # 검색어가 이 덩어리에 포함되어 있다면 결과에 추가
+            if keyword in full_text:
+                found_blocks.append(full_text)
         
         current_search_results = found_blocks # 복사 기능을 위해 저장
         
@@ -128,7 +175,7 @@ def main(page: ft.Page):
         page.update()
 
     # ---------------------------------------------------
-    # 5. 기능: 검색 결과 클립보드 복사 (공유/저장용)
+    # 5. 기능: 검색 결과 클립보드 복사
     # ---------------------------------------------------
     def copy_click(e):
         if not current_search_results:
@@ -137,9 +184,8 @@ def main(page: ft.Page):
             page.update()
             return
         
-        # 검색된 단락들을 빈 줄을 사이에 두고 하나의 텍스트로 합치기
         result_text = "\n\n".join(current_search_results)
-        page.set_clipboard(result_text) # 스마트폰 클립보드에 복사
+        page.set_clipboard(result_text)
         
         page.snack_bar = ft.SnackBar(
             ft.Text("✅ 검색 결과가 복사되었습니다! 카카오톡이나 메모장에 붙여넣기 하세요."),
@@ -149,7 +195,7 @@ def main(page: ft.Page):
         page.update()
 
     # ---------------------------------------------------
-    # 6. 화면에 모든 요소 순서대로 배치하기
+    # 6. 화면에 모든 요소 배치
     # ---------------------------------------------------
     page.add(
         title,
