@@ -3,7 +3,7 @@ import re
 
 def main(page: ft.Page):
     # 기본 페이지 설정
-    page.title = "업무일지 검색"
+    page.title = "업무일지 스마트 검색"
     page.theme_mode = ft.ThemeMode.LIGHT
     page.scroll = ft.ScrollMode.AUTO
     page.padding = 20
@@ -13,12 +13,12 @@ def main(page: ft.Page):
     # ---------------------------------------------------
     log_content = page.client_storage.get("log_content") or ""
     log_filename = page.client_storage.get("log_filename") or ""
-    current_search_results = [] # 검색 결과를 복사하기 위해 모아둘 리스트
+    current_search_results = []
 
     # ---------------------------------------------------
     # 2. 화면 UI 구성 요소들 준비
     # ---------------------------------------------------
-    title = ft.Text("🔍 업무일지 검색", size=24, weight=ft.FontWeight.BOLD, color=ft.colors.BLUE_700)
+    title = ft.Text("🔍 업무일지 스마트 검색", size=28, weight=ft.FontWeight.BOLD, color=ft.colors.BLUE_700)
     
     file_status = ft.Text(
         f"📁 현재 저장된 파일: {log_filename}" if log_filename else "📁 선택된 파일이 없습니다.", 
@@ -50,7 +50,6 @@ def main(page: ft.Page):
             file_path = e.files[0].path
             file_name = e.files[0].name
             try:
-                # 한글 깨짐 방지를 위해 utf-8과 cp949 모두 시도
                 try:
                     with open(file_path, "r", encoding="utf-8") as f:
                         log_content = f.read()
@@ -59,8 +58,6 @@ def main(page: ft.Page):
                         log_content = f.read()
                 
                 log_filename = file_name
-                
-                # 스마트폰 내부 기억장치에 저장
                 page.client_storage.set("log_content", log_content)
                 page.client_storage.set("log_filename", log_filename)
                 
@@ -78,7 +75,7 @@ def main(page: ft.Page):
     page.overlay.append(file_picker)
 
     # ---------------------------------------------------
-    # 4. 기능: 스마트 검색 및 추출 (PC 버전 로직 완벽 이식)
+    # 4. 기능: 스마트 검색 및 추출 (새로운 로직 적용)
     # ---------------------------------------------------
     def search_click(e):
         nonlocal current_search_results
@@ -99,43 +96,35 @@ def main(page: ft.Page):
         blocks = []
         curr_date = ""
         curr_block = []
-        has_indented = False
 
         # 한 줄씩 읽으면서 똑똑하게 덩어리 나누기
         for line in log_content.split('\n'):
+            original_line = line
             stripped = line.strip()
+            
+            # 빈 줄은 무시 (새로운 문단은 들여쓰기 여부로 판단)
             if not stripped:
-                if curr_block:
-                    curr_block.append(line)
                 continue
 
-            # 1. 날짜 확인 (예: 2026/10/1목, 2026-10-01 등)
-            if re.match(r'^\d{4}[/-]\d{1,2}[/-]\d{1,2}', line):
+            # 1. 날짜 확인 (예: 2026/10/5월)
+            if re.match(r'^\d{4}[/-]\d{1,2}[/-]\d{1,2}', stripped):
                 if curr_block:
                     blocks.append((curr_date, curr_block))
                 curr_date = stripped
                 curr_block = []
-                has_indented = False
                 continue
 
-            # 2. 들여쓰기(탭 또는 스페이스) 여부 확인
-            is_indented = line.startswith(' ') or line.startswith('\t')
+            # 2. 들여쓰기(탭 또는 띄어쓰기) 여부 확인
+            is_indented = original_line.startswith(' ') or original_line.startswith('\t')
 
             if not is_indented:
-                # 들여쓰기가 없는 줄 (제목)
-                if has_indented:
-                    # 이전 제목에 대한 세부내용(들여쓰기)이 끝났으므로, 이전 덩어리를 저장
-                    if curr_block:
-                        blocks.append((curr_date, curr_block))
-                    curr_block = [line]
-                    has_indented = False
-                else:
-                    # 세부내용 없이 제목만 연속으로 나오면 같은 덩어리로 묶음 (예: 병가휴가 -> 치과)
-                    curr_block.append(line)
+                # 들여쓰기가 없는 줄 -> 무조건 '새로운 제목'으로 취급하여 덩어리를 분리!
+                if curr_block:
+                    blocks.append((curr_date, curr_block))
+                curr_block = [original_line.rstrip('\r\n')]
             else:
-                # 들여쓰기가 있는 줄 (세부내용)
-                has_indented = True
-                curr_block.append(line)
+                # 들여쓰기가 있는 줄 -> 바로 직전 제목의 '본문'으로 추가
+                curr_block.append(original_line.rstrip('\r\n'))
 
         # 마지막 덩어리 저장
         if curr_block:
@@ -144,14 +133,14 @@ def main(page: ft.Page):
         # 검색어 매칭하기
         found_blocks = []
         for date, block_lines in blocks:
-            clean_block = "\n".join(block_lines).rstrip() # 끝에 남는 빈 줄 정리
-            full_text = f"{date}\n{clean_block}" if date else clean_block
+            clean_block = "\n".join(block_lines)
             
             # 검색어가 이 덩어리에 포함되어 있다면 결과에 추가
-            if keyword in full_text:
+            if keyword in clean_block:
+                full_text = f"{date}\n{clean_block}" if date else clean_block
                 found_blocks.append(full_text)
         
-        current_search_results = found_blocks # 복사 기능을 위해 저장
+        current_search_results = found_blocks
         
         # 화면에 결과 출력
         result_view.controls.clear()
@@ -195,7 +184,7 @@ def main(page: ft.Page):
         page.update()
 
     # ---------------------------------------------------
-    # 6. 화면에 모든 요소 배치
+    # 6. 화면에 배치
     # ---------------------------------------------------
     page.add(
         title,
@@ -218,5 +207,4 @@ def main(page: ft.Page):
         result_view
     )
 
-# 0.23.2 버전에 맞는 과거형 명령어
 ft.app(target=main)
