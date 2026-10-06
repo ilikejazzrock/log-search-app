@@ -2,7 +2,7 @@ import flet as ft
 import re
 
 def main(page: ft.Page):
-    page.title = "업무일지 스마트 검색"
+    page.title = "업무일지 검색"
     page.theme_mode = ft.ThemeMode.LIGHT
     page.scroll = ft.ScrollMode.AUTO
     page.padding = 20
@@ -11,7 +11,7 @@ def main(page: ft.Page):
     log_filename = page.client_storage.get("log_filename") or ""
     current_search_results = []
 
-    title = ft.Text("🔍 업무일지 스마트 검색", size=28, weight=ft.FontWeight.BOLD, color=ft.colors.BLUE_700)
+    title = ft.Text("🔍 업무일지 검색", size=20, weight=ft.FontWeight.BOLD, color=ft.colors.BLUE_700)
     
     file_status = ft.Text(
         f"📁 현재 저장된 파일: {log_filename}" if log_filename else "📁 선택된 파일이 없습니다.", 
